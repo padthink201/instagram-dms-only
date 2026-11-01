@@ -310,21 +310,71 @@
     setTimeout(() => { sweepQueued = false; sweep(); }, 150);
   };
 
-  // TEMPORARY tap checker for the Notifications page: if a tap opens nothing,
-  // show what was tapped so the rule can be fixed.
+  // Notifications: Instagram's phone site shows the rows but doesn't make them tappable.
+  // On a tap that opens nothing, find which post/reel/story the row is about (from the
+  // page's own data) and open it. It's still one hop: no scrolling deeper from there.
   const isNotifPage = () => /^\/(notifications|accounts\/activity)/.test(location.pathname);
+  const MEDIA_IN_TEXT = /\/(p|reel|reels|tv)\/([A-Za-z0-9_-]{5,})|\/stories\/([A-Za-z0-9._]+)\/(\d+)/;
+  const CODE_KEYS = /^(code|shortcode|media_code|mediaCode|media_shortcode|mediaShortcode)$/i;
+
+  const scanProps = (obj, depth, seen) => {
+    if (!obj || typeof obj !== 'object' || depth > 4 || seen.has(obj)) return null;
+    seen.add(obj);
+    let n = 0;
+    for (const key in obj) {
+      if (++n > 80) break;
+      if (key === 'children' || key === '_owner' || key === 'return' || key === 'ref') continue;
+      let v;
+      try { v = obj[key]; } catch (e) { continue; }
+      if (typeof v === 'string') {
+        const m = v.match(MEDIA_IN_TEXT);
+        if (m) return m[3] ? '/stories/' + m[3] + '/' + m[4] + '/' : '/' + (m[1] === 'tv' ? 'p' : m[1]) + '/' + m[2] + '/';
+        if (CODE_KEYS.test(key) && /^[A-Za-z0-9_-]{6,}$/.test(v)) return '/p/' + v + '/';
+      } else if (v && typeof v === 'object') {
+        const r = scanProps(v, depth + 1, seen);
+        if (r) return r;
+      }
+    }
+    return null;
+  };
+
+  const findTargetFor = (el) => {
+    // 1) a plain link somewhere inside the row
+    const row = el.closest('[role="listitem"], li') || el.parentElement;
+    const link = row && row.querySelector && row.querySelector('a[href*="/p/"], a[href*="/reel"], a[href*="/stories/"]');
+    if (link) return link.getAttribute('href');
+    // 2) the page's own data behind the row (React props)
+    for (let node = el; node && node !== document.body; node = node.parentElement) {
+      const fk = Object.keys(node).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+      if (!fk) continue;
+      let f = node[fk];
+      const seen = new Set();
+      for (let i = 0; f && i < 40; i++, f = f.return) {
+        const hit = scanProps(f.memoizedProps, 0, seen);
+        if (hit) return hit;
+      }
+      break;
+    }
+    return null;
+  };
+
   document.addEventListener('click', (e) => {
     if (!isNotifPage()) return;
-    const before = location.href;
     const t = e.target;
-    const a = t && t.closest && t.closest('a[href]');
-    const btn = t && t.closest && t.closest('[role="button"], button');
-    const desc = a ? 'link ' + a.getAttribute('href')
-      : btn ? 'button "' + (btn.getAttribute('aria-label') || (btn.textContent || '').trim().slice(0, 25)) + '"'
-      : (t.tagName || '?').toLowerCase() + ' (not a link)';
+    if (!t || !t.closest) return;
+    if (t.closest('a[href], button, input, textarea')) return; // real links/buttons work on their own
+    const before = location.href;
     setTimeout(() => {
-      if (location.href === before && isNotifPage()) showBanner('Tap opened nothing: ' + desc);
-    }, 1500);
+      if (location.href !== before || !isNotifPage()) return;
+      const target = findTargetFor(t);
+      if (target) {
+        showBanner('Opening…');
+        ss.set('dmonly_prev', location.pathname);
+        location.assign(target);
+      } else {
+        showBanner("Instagram's phone site can't open this one");
+      }
+    }, 600);
   }, true);
 
   const onReady = () => {

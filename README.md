@@ -21,7 +21,8 @@ or the whole thing is pointless.
 - Sending photos/videos (opens straight into your gallery)
 - Watching stories (stories bar on the Home screen)
 - Posting a regular story
-- Activity page (likes, comments, follows on your stuff)
+- Activity / notifications page. Instagram's phone site doesn't make the rows tappable, so the app
+  finds the post, reel or story a row is about and opens it when you tap it (best effort)
 - Opening **one** reel/post at a time (from a chat, notifications, etc.): likes, comments, video and
   sound work, but from a reel/post you can't swipe or scroll into another one
 - Audio and video calls through **call mode** (📞 button in chats, see limitations)

@@ -73,6 +73,17 @@ class MainActivity : ComponentActivity() {
         private val INSTAGRAM_ORIGINS = setOf("https://www.instagram.com", "https://instagram.com")
         private const val UPDATE_FILE = "DMs-update.apk"
         private const val SNAPSHOT_EVERY_MS = 45_000L
+
+        /**
+         * Desktop call screen: lay the page out 900px wide and zoom it out to fit the phone's
+         * width, so the whole call UI is visible in portrait.
+         */
+        private const val FIT_CALL_JS = """(function(){
+            var m=document.querySelector('meta[name=viewport]');
+            if(!m){m=document.createElement('meta');m.name='viewport';
+              (document.head||document.documentElement).appendChild(m);}
+            if(m.content!=='width=900'){m.content='width=900';}
+        })();"""
     }
 
     private lateinit var root: FrameLayout
@@ -81,6 +92,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: SharedPreferences
     private var docStartInjection = false
     private var defaultUserAgent: String? = null
+    private var pageStarts = 0
     private val handler = Handler(Looper.getMainLooper())
 
     // Small floating chips (offline status, update)
@@ -305,7 +317,26 @@ class MainActivity : ComponentActivity() {
         prefs.edit().putBoolean("desktop_mode", on).putBoolean("call_mode_auto", on && auto).apply()
         webView.settings.userAgentString = userAgentFor(on)
         val current = webView.url
-        webView.loadUrl(if (isInstagramUrl(current)) current!! else START_URL)
+        val target = if (isInstagramUrl(current)) current!! else START_URL
+        // Instagram's background service worker remembers the old layout until the app
+        // restarts. Remove it and drop cached pages, then reload: the switch is immediate.
+        webView.stopLoading()
+        webView.clearCache(false)
+        val quoted = org.json.JSONObject.quote(target)
+        webView.evaluateJavascript(
+            """(async function(){
+                try { const rs = await navigator.serviceWorker.getRegistrations();
+                      await Promise.all(rs.map(function(r){ return r.unregister(); })); } catch(e) {}
+                try { const ks = await caches.keys();
+                      await Promise.all(ks.map(function(k){ return caches.delete(k); })); } catch(e) {}
+                location.replace($quoted);
+            })();""", null
+        )
+        // Fallback if the page couldn't run the script (e.g. offline copy shown).
+        val startsBefore = pageStarts
+        handler.postDelayed({
+            if (pageStarts == startsBefore) webView.loadUrl(target)
+        }, 1500)
         updateModeUi(current)
     }
 
@@ -347,6 +378,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
+            pageStarts++
             showingArchive = url?.startsWith("file:") == true
             if (!docStartInjection && isInstagramUrl(url)) view.evaluateJavascript(guardScript, null)
         }
@@ -435,6 +467,16 @@ class MainActivity : ComponentActivity() {
             closePopup()
             val p = WebView(this@MainActivity)
             configureWebView(p)
+            if (desktopMode()) {
+                p.settings.useWideViewPort = true
+                p.settings.loadWithOverviewMode = true
+                p.settings.setSupportZoom(true)
+                p.settings.builtInZoomControls = true
+                p.settings.displayZoomControls = false
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                    WebViewCompat.addDocumentStartJavaScript(p, FIT_CALL_JS, INSTAGRAM_ORIGINS)
+                }
+            }
             p.webViewClient = PopupClient()
             p.webChromeClient = this
             p.setBackgroundColor(Color.BLACK)
@@ -479,6 +521,15 @@ class MainActivity : ComponentActivity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
             if (url != null) routePopup(Uri.parse(url))
+            if (desktopMode()) view.evaluateJavascript(FIT_CALL_JS, null)
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            super.onPageFinished(view, url)
+            if (desktopMode()) {
+                view.evaluateJavascript(FIT_CALL_JS, null)
+                handler.postDelayed({ if (popup == view) view.evaluateJavascript(FIT_CALL_JS, null) }, 1500)
+            }
         }
     }
 
