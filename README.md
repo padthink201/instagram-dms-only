@@ -21,7 +21,14 @@ or the whole thing is pointless.
 - Sending photos/videos (opens straight into your gallery)
 - Watching stories (stories bar on the Home screen)
 - Posting a regular story
-- Opening reels and posts that friends send you in chat: likes, comments and sound work
+- Activity page (likes, comments, follows on your stuff)
+- Opening **one** reel/post at a time, from a chat or from activity: likes, comments, video and sound
+  work, but you can't swipe or scroll into other reels/posts
+- Audio and video calls, *if Instagram's website offers them on your phone* (see limitations)
+- **Offline:** if your internet drops, what's already on screen stays. If the app is opened
+  with no internet, it shows a saved copy of the last chat screen you had open
+- **Updates inside the app:** a small "New version · Update" bar appears when a new build is out
+- Long-press the app icon for **Check for updates** and **GitHub page**
 
 ## What's blocked on purpose
 - Home feed (the posts under the stories bar are hidden)
@@ -44,15 +51,22 @@ app can't add them without breaking Instagram's rules and risking your account.
 | Posting a story to **Close Friends** only | ⚠️ Not confirmed. Probably not available on the website. If you see a Close Friends option when sharing a story, it works. |
 | **Add to your story** when someone mentions you in theirs | ⚠️ Not confirmed. Probably not available on the website. |
 | Story stickers, music, polls etc. | ⚠️ Very limited on the website compared to the app. |
-| Push notifications | 🚫 Disabled on purpose (see above). |
+| Push notifications | 🚫 Disabled on purpose (see above). Android's WebView can't receive web push anyway. |
+| Calls | ⚠️ Not confirmed. The app supports call windows, camera and mic, but Instagram decides whether its mobile website shows call buttons. |
+| Incoming calls ringing while the app is closed | ❌ Not possible (needs push notifications). You can only get a call while the app is open. |
+| Offline copy | Read-only snapshot of the last chat screen. Sending messages needs internet. |
 
 If something you need shows **"Blocked: /something/"** at the bottom of the screen,
 the app blocked a page it shouldn't have. Open an issue with that text.
 
 ## Updating
 Every change pushed to `main` is built automatically by GitHub Actions (~3–5 min) and
-published as a new release. Install the new `DMs.apk` from the releases link above.
-It installs over the old version and you stay logged in.
+published as a new release. The app notices it on startup and shows a small
+**New version · Update** bar: tap **Update**, then **Install**. (The first time, Android asks you to
+allow "Install unknown apps" for DMs.) You can also install the new `DMs.apk` from the releases
+link above. Either way it installs over the old version and you stay logged in.
+
+Builds 1–7 don't have the update bar. Install build 8 or newer by hand once.
 
 ## For developers
 - Blocking rules: `app/src/main/assets/dmonly.js` (allowed paths are in `ALLOWED_PREFIXES`)

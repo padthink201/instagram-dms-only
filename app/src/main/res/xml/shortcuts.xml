@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="check_update"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_update">
+        <intent
+            android:action="com.zurab.dmonly.CHECK_UPDATE"
+            android:targetPackage="com.zurab.dmonly"
+            android:targetClass="com.zurab.dmonly.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="github"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_github">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="https://github.com/padthink201/instagram-dms-only" />
+    </shortcut>
+</shortcuts>
