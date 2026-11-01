@@ -97,15 +97,25 @@
     return isSource(b) ? b : HOME;
   };
 
-  const showBanner = (text) => {
+  const showBanner = (text, onTap, ms) => {
     if (!SHOW_BLOCKED_BANNER || !document.body) return;
     const old = document.getElementById('dmonly-banner');
     if (old) old.remove();
     const b = document.createElement('div');
     b.id = 'dmonly-banner';
     b.textContent = text;
+    if (onTap) {
+      b.style.pointerEvents = 'auto';
+      b.style.textDecoration = 'underline';
+      b.addEventListener('click', (e) => { e.stopPropagation(); onTap(); b.remove(); }, true);
+    }
     document.body.appendChild(b);
-    setTimeout(() => { b.classList.add('out'); setTimeout(() => b.remove(), 300); }, 2600);
+    setTimeout(() => { b.classList.add('out'); setTimeout(() => b.remove(), 300); }, ms || 2600);
+  };
+
+  // Hands text to the app, which puts it on the phone's clipboard.
+  const copyToPhone = (text) => {
+    location.href = 'dmonly://copy?text=' + encodeURIComponent(text.slice(0, 20000));
   };
 
   const hardBlock = (path, silent) => {
@@ -390,10 +400,55 @@
     return null;
   };
 
+  // Collects what Instagram stored behind a row (for fixing the "can't open" case).
+  const dumpRow = (el) => {
+    const out = [];
+    const row = el.closest('[role="listitem"], li') || el.parentElement;
+    if (row) {
+      out.push('ROW-HTML: ' + row.outerHTML.replace(/\s+/g, ' ').slice(0, 1500));
+    }
+    let fiberKey = null;
+    let node = el;
+    for (; node && node !== document.body; node = node.parentElement) {
+      fiberKey = Object.keys(node).find((k) => k.startsWith('__react'));
+      if (fiberKey) break;
+    }
+    out.push('REACT-KEY: ' + (fiberKey || 'none'));
+    if (fiberKey && fiberKey.startsWith('__reactFiber')) {
+      let f = node[fiberKey];
+      const seen = new Set();
+      const walk = (obj, path, depth) => {
+        if (out.length > 260 || !obj || typeof obj !== 'object' || depth > 5 || seen.has(obj)) return;
+        if (obj.nodeType || obj === window) return;
+        seen.add(obj);
+        let n = 0;
+        for (const k in obj) {
+          if (++n > 60) break;
+          if (k === 'children' || k === '_owner' || k === 'return' || k === 'ref') continue;
+          let v; try { v = obj[k]; } catch (e) { continue; }
+          if (typeof v === 'string' || typeof v === 'number' || typeof v === 'bigint') {
+            const sv = String(v);
+            if (sv.length && sv.length < 300) out.push(path + '.' + k + ' = ' + sv);
+          } else if (typeof v === 'function') {
+            // skip
+          } else if (v && typeof v === 'object') {
+            walk(v, path + '.' + k, depth + 1);
+          }
+        }
+      };
+      for (let i = 0; f && i < 25 && out.length < 260; i++, f = f.return) {
+        const name = (f.type && (f.type.displayName || f.type.name)) || (typeof f.type === 'string' ? f.type : '?');
+        walk(f.memoizedProps, '#' + i + ':' + name, 0);
+      }
+    }
+    return out.join('\n');
+  };
+
   document.addEventListener('click', (e) => {
     if (!isNotifPage()) return;
     const t = e.target;
     if (!t || !t.closest) return;
+    if (t.closest('#dmonly-banner')) return;
     if (t.closest('a[href], button, input, textarea')) return; // real links/buttons work on their own
     const before = location.href;
     setTimeout(() => {
@@ -404,7 +459,8 @@
         ss.set('dmonly_prev', location.pathname);
         location.assign(target);
       } else {
-        showBanner("Instagram's phone site can't open this one");
+        showBanner("Can't open this one · tap here to copy details for Claude",
+          () => { copyToPhone(dumpRow(t)); }, 6000);
       }
     }, 600);
   }, true);

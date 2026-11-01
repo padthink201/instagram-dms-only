@@ -418,11 +418,27 @@ class MainActivity : ComponentActivity() {
     /** true = handled here, don't load it in the WebView. */
     private fun handleNavigation(uri: Uri): Boolean {
         val scheme = uri.scheme?.lowercase()
+        if (scheme == "dmonly") {
+            handleAppCommand(uri)
+            return true
+        }
         // Never jump into the real Instagram app (instagram://, intent://) or follow file links.
         if (scheme != "http" && scheme != "https") return true
         if (isInstagramHost(uri.host)) return false
         openExternal(uri)
         return true
+    }
+
+    /** Commands from the page script, e.g. dmonly://copy?text=... */
+    private fun handleAppCommand(uri: Uri) {
+        when (uri.host) {
+            "copy" -> {
+                val text = uri.getQueryParameter("text") ?: return
+                val cm = getSystemService(android.content.ClipboardManager::class.java) ?: return
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("DMs details", text))
+                toast("Copied. Paste it to Claude")
+            }
+        }
     }
 
     private fun openExternal(uri: Uri) {
