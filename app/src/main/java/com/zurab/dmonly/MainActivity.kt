@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -71,6 +72,14 @@ class MainActivity : ComponentActivity() {
         private val INSTAGRAM_ORIGINS = setOf("https://www.instagram.com", "https://instagram.com")
         private const val UPDATE_FILE = "DMs-update.apk"
         private const val SNAPSHOT_EVERY_MS = 45_000L
+
+        /** Makes the desktop call page lay out like a 16:9 screen, zoomed to fit. */
+        private const val WIDE_VIEWPORT_JS = """(function(){
+            var m=document.querySelector('meta[name=viewport]');
+            if(!m){m=document.createElement('meta');m.name='viewport';
+              (document.head||document.documentElement).appendChild(m);}
+            if(m.content!=='width=1280'){m.content='width=1280';}
+        })();"""
     }
 
     private lateinit var root: FrameLayout
@@ -87,6 +96,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var updateChip: LinearLayout
     private lateinit var updateLabel: TextView
     private lateinit var updateAction: TextView
+    private lateinit var callModeChip: LinearLayout
+    private lateinit var callButton: TextView
 
     // Calls open in a pop-up window
     private var popup: WebView? = null
@@ -196,6 +207,7 @@ class MainActivity : ComponentActivity() {
 
         checkForUpdates(manual = intent?.action == ACTION_CHECK_UPDATE)
         if (intent?.action == ACTION_TOGGLE_DESKTOP) toggleDesktopMode()
+        updateModeUi(START_URL)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -293,13 +305,43 @@ class MainActivity : ComponentActivity() {
             .replace(" Mobile", "")
     }
 
+    /** Switches between phone and desktop website, staying on the current page. */
+    private fun setDesktopMode(on: Boolean, auto: Boolean) {
+        prefs.edit().putBoolean("desktop_mode", on).putBoolean("call_mode_auto", on && auto).apply()
+        webView.settings.userAgentString = userAgentFor(on)
+        val current = webView.url
+        webView.loadUrl(if (isInstagramUrl(current)) current!! else START_URL)
+        updateModeUi(current)
+    }
+
     private fun toggleDesktopMode() {
         val on = !desktopMode()
-        prefs.edit().putBoolean("desktop_mode", on).apply()
-        webView.settings.userAgentString = userAgentFor(on)
-        popup?.settings?.userAgentString = userAgentFor(on)
-        toast(if (on) "Desktop mode ON (for calls)" else "Desktop mode OFF")
-        webView.loadUrl(START_URL)
+        setDesktopMode(on, auto = false)
+        toast(if (on) "Call mode ON" else "Call mode OFF")
+    }
+
+    /** 📞 in a chat: reload this chat as the desktop site, which has call buttons. */
+    private fun enterCallMode() {
+        setDesktopMode(true, auto = true)
+        toast("Call mode: tap the call button at the top of the chat")
+    }
+
+    private fun exitCallMode() {
+        if (desktopMode()) setDesktopMode(false, auto = false)
+    }
+
+    private fun isChatUrl(url: String?): Boolean {
+        if (!isInstagramUrl(url)) return false
+        return Uri.parse(url).path?.startsWith("/direct/t/") == true
+    }
+
+    /** Shows 📞 in chats (phone mode) or the "Call mode · Exit" chip (desktop mode). */
+    private fun updateModeUi(url: String? = webView.url) {
+        if (!::callButton.isInitialized) return
+        val desktop = desktopMode()
+        if (desktop) callModeChip.showAnimated() else callModeChip.hideAnimated()
+        if (!desktop && !showingArchive && isChatUrl(url)) callButton.showAnimated(fromY = 0f)
+        else callButton.hideAnimated()
     }
 
     private inner class MainClient : WebViewClient() {
@@ -319,6 +361,11 @@ class MainActivity : ComponentActivity() {
             if (!docStartInjection && isInstagramUrl(url)) view.evaluateJavascript(guardScript, null)
             CookieManager.getInstance().flush()
             if (isInstagramUrl(url)) handler.postDelayed({ saveSnapshot() }, 4000)
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+            super.doUpdateVisitedHistory(view, url, isReload)
+            updateModeUi(url)
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -393,12 +440,25 @@ class MainActivity : ComponentActivity() {
             closePopup()
             val p = WebView(this@MainActivity)
             configureWebView(p)
+            if (desktopMode()) {
+                p.settings.useWideViewPort = true
+                p.settings.loadWithOverviewMode = true
+                p.settings.setSupportZoom(true)
+                p.settings.builtInZoomControls = true
+                p.settings.displayZoomControls = false
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                    WebViewCompat.addDocumentStartJavaScript(p, WIDE_VIEWPORT_JS, INSTAGRAM_ORIGINS)
+                }
+            }
             p.webViewClient = PopupClient()
             p.webChromeClient = this
+            p.setBackgroundColor(Color.BLACK)
             p.visibility = View.GONE
             root.addView(p, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
             chips.bringToFront()
             popup = p
+            // Show it right away: call windows often start blank and fill in by script.
+            showPopup()
             val transport = resultMsg.obj as WebView.WebViewTransport
             transport.webView = p
             resultMsg.sendToTarget()
@@ -434,6 +494,15 @@ class MainActivity : ComponentActivity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
             if (url != null) routePopup(Uri.parse(url))
+            if (desktopMode()) view.evaluateJavascript(WIDE_VIEWPORT_JS, null)
+        }
+
+        override fun onPageFinished(view: WebView, url: String?) {
+            super.onPageFinished(view, url)
+            if (desktopMode()) {
+                view.evaluateJavascript(WIDE_VIEWPORT_JS, null)
+                handler.postDelayed({ if (popup == view) view.evaluateJavascript(WIDE_VIEWPORT_JS, null) }, 1500)
+            }
         }
     }
 
@@ -469,6 +538,8 @@ class MainActivity : ComponentActivity() {
         if (p.visibility == View.VISIBLE) return
         p.showAnimated(fromY = 40f)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Desktop call screen is built for wide screens: use landscape (16:9).
+        if (desktopMode()) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
 
     private fun closePopup() {
@@ -477,6 +548,11 @@ class MainActivity : ComponentActivity() {
         root.removeView(p)
         handler.post { p.destroy() }
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        // Call ended: go back to the normal phone layout if call mode was switched on by 📞.
+        if (prefs.getBoolean("call_mode_auto", false) && !isDestroyed) {
+            handler.postDelayed({ if (!isDestroyed) exitCallMode() }, 600)
+        }
     }
 
     // ---------------------------------------------------------------- offline copy
@@ -703,7 +779,45 @@ class MainActivity : ComponentActivity() {
             addView(updateAction)
             addView(close)
         }
-        chips.addView(updateChip, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+        chips.addView(updateChip, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { bottomMargin = dp(6) })
+
+        // "Call mode · Exit" (shown while the desktop site is loaded)
+        callModeChip = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = pill()
+            elevation = dp(4).toFloat()
+            setPadding(dp(4), 0, dp(4), 0)
+            visibility = View.GONE
+            addView(chipText("📞 Call mode"))
+            addView(chipText("Exit", color = 0xFF8AB4FF.toInt(), bold = true).apply {
+                setOnClickListener { exitCallMode() }
+            })
+        }
+        chips.addView(callModeChip, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT))
+
+        // Small round 📞 on the right edge of a chat
+        callButton = TextView(this).apply {
+            text = "📞"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xE6202020.toInt())
+            }
+            elevation = dp(6).toFloat()
+            alpha = 0.9f
+            visibility = View.GONE
+            contentDescription = "Call"
+            setOnClickListener { enterCallMode() }
+        }
+        root.addView(
+            callButton,
+            FrameLayout.LayoutParams(dp(44), dp(44), Gravity.TOP or Gravity.END).apply {
+                marginEnd = dp(8)
+                topMargin = dp(140)
+            }
+        )
     }
 
     private fun showStatus(text: String) {

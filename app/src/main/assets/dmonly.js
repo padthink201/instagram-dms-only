@@ -21,8 +21,6 @@
     '/challenge/', '/checkpoint/', '/auth_platform/', '/two_factor/', // security checks
   ];
 
-  // Pages from which you may open a single reel/post.
-  const TICKET_SOURCES = ['/direct/', '/accounts/activity', '/notifications'];
 
   // /p/ID, /reel/ID, /reels/ID (+ /comments/, /liked_by/ etc. of the same ID)
   const MEDIA_RE = /^\/(reels?|p)\/([^/?#]+)/;
@@ -39,7 +37,10 @@
     del: (k) => { try { sessionStorage.removeItem(k); } catch (e) {} },
   };
 
-  const isSource = (p) => TICKET_SOURCES.some((s) => (p || '').startsWith(s));
+  // Any allowed page that isn't itself a reel/post may open ONE reel/post ("one hop").
+  // From a reel/post you can't go to another one, so there's no scrolling deeper.
+  const isSource = (p) => !!p && !MEDIA_RE.test(p) &&
+    (p === '/' || ALLOWED_PREFIXES.some((x) => p.startsWith(x)));
   const ticket = () => ss.get('dmonly_ticket');
 
   const allowed = (path, from) => {
@@ -125,7 +126,9 @@
     if (!a) return;
     const u = urlOf(a.getAttribute('href'));
     if (!u || u.origin !== location.origin) return;
-    if (!allowed(u.pathname, location.pathname)) {
+    if (allowed(u.pathname, location.pathname)) {
+      setPageClasses(u.pathname);
+    } else {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (location.pathname.startsWith('/direct/t/')) goInbox();
@@ -152,6 +155,10 @@
           hardBlock(u.pathname);
           return;
         }
+      }
+      if (url != null) {
+        const u = urlOf(url);
+        if (u && u.origin === location.origin) setPageClasses(u.pathname);
       }
       const r = orig.apply(this, arguments);
       check();

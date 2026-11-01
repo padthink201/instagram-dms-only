@@ -22,9 +22,9 @@ or the whole thing is pointless.
 - Watching stories (stories bar on the Home screen)
 - Posting a regular story
 - Activity page (likes, comments, follows on your stuff)
-- Opening **one** reel/post at a time, from a chat or from activity: likes, comments, video and sound
-  work, but you can't swipe or scroll into other reels/posts
-- Audio and video calls, *if Instagram's website offers them on your phone* (see limitations)
+- Opening **one** reel/post at a time (from a chat, notifications, etc.): likes, comments, video and
+  sound work, but from a reel/post you can't swipe or scroll into another one
+- Audio and video calls through **call mode** (📞 button in chats, see limitations)
 - **Offline:** if your internet drops, what's already on screen stays. If the app is opened
   with no internet, it shows a saved copy of the last chat screen you had open
 - **Updates inside the app:** a small "New version · Update" bar appears when a new build is out
@@ -52,7 +52,7 @@ app can't add them without breaking Instagram's rules and risking your account.
 | **Add to your story** when someone mentions you in theirs | ⚠️ Not confirmed. Probably not available on the website. |
 | Story stickers, music, polls etc. | ⚠️ Very limited on the website compared to the app. |
 | Push notifications | 🚫 Disabled on purpose (see above). Android's WebView can't receive web push anyway. |
-| Calls | ⚠️ Instagram's **mobile** website has no call buttons. Experimental workaround: long-press the app icon → **Desktop mode (calls)** to load the desktop website, which may show them. Same shortcut turns it off. |
+| Calls | Instagram's **mobile** website has no call buttons, so the app uses a **call mode**: tap the small 📞 on the right side of a chat. The chat reloads as the desktop website, which has audio and video call buttons. The call screen opens in landscape. When the call ends, the app switches back to the phone layout by itself (or tap **Exit** on the "Call mode" chip). |
 | Incoming calls ringing while the app is closed | ❌ Not possible (needs push notifications). You can only get a call while the app is open. |
 | Offline copy | Read-only snapshot of the last chat screen. Sending messages needs internet. |
 
