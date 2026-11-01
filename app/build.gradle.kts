@@ -11,8 +11,8 @@ android {
         applicationId = "com.zurab.dmonly"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionName = "1.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
     }
 
     // Fixed key, so every new build installs as an update (you stay logged in).

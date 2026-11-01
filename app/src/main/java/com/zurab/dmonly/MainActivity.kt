@@ -22,7 +22,9 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -46,7 +48,17 @@ class MainActivity : ComponentActivity() {
     private var customView: View? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
 
-    // Photo/video picker (for posting stories and sending photos in chat)
+    // Gallery (Android photo picker) — opens straight to your photos.
+    private val pickOne =
+        registerForActivityResult(PickVisualMedia()) { uri ->
+            deliverFiles(uri?.let { arrayOf(it) })
+        }
+    private val pickMany =
+        registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
+            deliverFiles(if (uris.isEmpty()) null else uris.toTypedArray())
+        }
+
+    // Fallback file picker for anything that isn't a photo/video.
     private val fileChooser =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val data = result.data
@@ -58,9 +70,13 @@ class MainActivity : ComponentActivity() {
                     else -> null
                 }
             } else null
-            fileCallback?.onReceiveValue(uris)
-            fileCallback = null
+            deliverFiles(uris)
         }
+
+    private fun deliverFiles(uris: Array<Uri>?) {
+        fileCallback?.onReceiveValue(uris)
+        fileCallback = null
+    }
 
     // Mic / camera permission (voice messages, calls)
     private val permissionLauncher =
@@ -138,7 +154,13 @@ class MainActivity : ComponentActivity() {
                 fileCallback?.onReceiveValue(null)
                 fileCallback = callback
                 return try {
-                    fileChooser.launch(buildPickerIntent(params))
+                    val media = galleryTypeFor(params)
+                    val multiple = params.mode == FileChooserParams.MODE_OPEN_MULTIPLE
+                    when {
+                        media == null -> fileChooser.launch(buildPickerIntent(params))
+                        multiple -> pickMany.launch(PickVisualMediaRequest(media))
+                        else -> pickOne.launch(PickVisualMediaRequest(media))
+                    }
                     true
                 } catch (e: ActivityNotFoundException) {
                     fileCallback = null
@@ -211,12 +233,28 @@ class MainActivity : ComponentActivity() {
     private fun isInstagramUrl(url: String?): Boolean =
         url != null && isInstagramHost(Uri.parse(url).host)
 
-    private fun buildPickerIntent(params: WebChromeClient.FileChooserParams): Intent {
-        val types = params.acceptTypes
+    private fun acceptTypes(params: WebChromeClient.FileChooserParams): List<String> =
+        params.acceptTypes
             .flatMap { it.split(",") }
-            .map { it.trim() }
+            .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
-            .ifEmpty { listOf("image/*", "video/*") }
+
+    /** Which gallery to show, or null if the page wants non-media files. */
+    private fun galleryTypeFor(params: WebChromeClient.FileChooserParams): PickVisualMedia.VisualMediaType? {
+        val types = acceptTypes(params)
+        if (types.isEmpty()) return PickVisualMedia.ImageAndVideo
+        val isImage = { t: String -> t.startsWith("image/") || t in setOf(".jpg", ".jpeg", ".png", ".heic", ".webp", ".gif") }
+        val isVideo = { t: String -> t.startsWith("video/") || t in setOf(".mp4", ".mov", ".m4v", ".webm") }
+        return when {
+            types.all(isImage) -> PickVisualMedia.ImageOnly
+            types.all(isVideo) -> PickVisualMedia.VideoOnly
+            types.all { isImage(it) || isVideo(it) } -> PickVisualMedia.ImageAndVideo
+            else -> null
+        }
+    }
+
+    private fun buildPickerIntent(params: WebChromeClient.FileChooserParams): Intent {
+        val types = acceptTypes(params).ifEmpty { listOf("*/*") }
         return Intent(Intent.ACTION_GET_CONTENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = if (types.size == 1) types[0] else "*/*"
