@@ -131,6 +131,8 @@
     html.classList.toggle('dmonly-home', path === '/');
     html.classList.toggle('dmonly-media', MEDIA_RE.test(path));
     html.classList.toggle('dmonly-direct', path.startsWith('/direct/'));
+    html.classList.toggle('dmonly-thread', path.startsWith('/direct/t/'));
+    html.classList.toggle('dmonly-stories', path.startsWith('/stories/') || path.startsWith('/create/story'));
     html.classList.toggle('dmonly-myprofile', isMyProfile(path));
   };
 
@@ -222,8 +224,10 @@
       /* Reels tab + Explore buttons */
       a[href="/reels/"], a[href="/explore/"] { display: none !important; }
 
-      /* Feed posts hidden (never inside chats or on the one reel/post you opened) */
-      html:not(.dmonly-media):not(.dmonly-direct) main article { display: none !important; }
+      /* Posts/reels hidden everywhere except: inside a chat, the one reel/post you opened, stories.
+         Videos too, so nothing can flash while switching pages. */
+      html:not(.dmonly-media):not(.dmonly-thread) main article { display: none !important; }
+      html:not(.dmonly-media):not(.dmonly-thread):not(.dmonly-stories) video { visibility: hidden !important; }
 
       /* On a reel/post page: only the first one is shown, nothing below it to scroll into */
       html.dmonly-media main article ~ article,
@@ -265,8 +269,16 @@
   addStyle();
 
   // 4) Periodic sweep: remove app banners; on reel/post pages hide links to OTHER reels/posts.
+  const videoAllowed = () => html.classList.contains('dmonly-media') ||
+    html.classList.contains('dmonly-thread') || html.classList.contains('dmonly-stories');
+
   const sweep = () => {
     learnMe();
+    if (!videoAllowed()) {
+      for (const v of document.querySelectorAll('video')) {
+        try { v.muted = true; if (!v.paused) v.pause(); v.autoplay = false; } catch (e) {}
+      }
+    }
     // "Use the app" banners
     const els = document.querySelectorAll('a, button, [role="button"], span, div');
     for (const el of els) {
@@ -316,13 +328,26 @@
   const isNotifPage = () => /^\/(notifications|accounts\/activity)/.test(location.pathname);
   const MEDIA_IN_TEXT = /\/(p|reel|reels|tv)\/([A-Za-z0-9_-]{5,})|\/stories\/([A-Za-z0-9._]+)\/(\d+)/;
   const CODE_KEYS = /^(code|shortcode|media_code|mediaCode|media_shortcode|mediaShortcode)$/i;
+  // Instagram notification targets like "media?id=3456_789" or "comments_v2?media_id=3456"
+  const MEDIA_ID_IN_TEXT = /media(?:\?id=|_id=|Id=|_id":"?|id":"?)(\d{8,})/i;
+  const MEDIA_ID_KEYS = /^(media_?id|mediaPk|media_pk|post_?id|postId)$/i;
+  const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const pkToCode = (pk) => {
+    try {
+      let n = BigInt(String(pk).split('_')[0]);
+      let out = '';
+      while (n > 0n) { out = B64[Number(n % 64n)] + out; n /= 64n; }
+      return out || null;
+    } catch (e) { return null; }
+  };
 
   const scanProps = (obj, depth, seen) => {
-    if (!obj || typeof obj !== 'object' || depth > 4 || seen.has(obj)) return null;
+    if (!obj || typeof obj !== 'object' || depth > 6 || seen.has(obj)) return null;
+    if (obj.nodeType || obj === window) return null;
     seen.add(obj);
     let n = 0;
     for (const key in obj) {
-      if (++n > 80) break;
+      if (++n > 120) break;
       if (key === 'children' || key === '_owner' || key === 'return' || key === 'ref') continue;
       let v;
       try { v = obj[key]; } catch (e) { continue; }
@@ -330,6 +355,12 @@
         const m = v.match(MEDIA_IN_TEXT);
         if (m) return m[3] ? '/stories/' + m[3] + '/' + m[4] + '/' : '/' + (m[1] === 'tv' ? 'p' : m[1]) + '/' + m[2] + '/';
         if (CODE_KEYS.test(key) && /^[A-Za-z0-9_-]{6,}$/.test(v)) return '/p/' + v + '/';
+        const mi = v.match(MEDIA_ID_IN_TEXT);
+        if (mi) { const c = pkToCode(mi[1]); if (c) return '/p/' + c + '/'; }
+        if (MEDIA_ID_KEYS.test(key) && /^\d{8,}(_\d+)?$/.test(v)) { const c = pkToCode(v); if (c) return '/p/' + c + '/'; }
+      } else if ((typeof v === 'number' || typeof v === 'bigint') && MEDIA_ID_KEYS.test(key)) {
+        const c = pkToCode(v);
+        if (c) return '/p/' + c + '/';
       } else if (v && typeof v === 'object') {
         const r = scanProps(v, depth + 1, seen);
         if (r) return r;
@@ -349,8 +380,9 @@
       if (!fk) continue;
       let f = node[fk];
       const seen = new Set();
-      for (let i = 0; f && i < 40; i++, f = f.return) {
-        const hit = scanProps(f.memoizedProps, 0, seen);
+      for (let i = 0; f && i < 60; i++, f = f.return) {
+        const hit = scanProps(f.memoizedProps, 0, seen) ||
+          (f.memoizedState && typeof f.memoizedState === 'object' ? scanProps(f.memoizedState.memoizedState, 0, seen) : null);
         if (hit) return hit;
       }
       break;

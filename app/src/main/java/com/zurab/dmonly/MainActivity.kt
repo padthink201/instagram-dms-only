@@ -79,11 +79,25 @@ class MainActivity : ComponentActivity() {
          * width, so the whole call UI is visible in portrait.
          */
         private const val FIT_CALL_JS = """(function(){
-            var m=document.querySelector('meta[name=viewport]');
-            if(!m){m=document.createElement('meta');m.name='viewport';
-              (document.head||document.documentElement).appendChild(m);}
-            if(m.content!=='width=900'){m.content='width=900';}
+            function fix(){
+                var ms=document.querySelectorAll('meta[name=viewport]');
+                for(var i=0;i<ms.length-1;i++){ms[i].remove();}
+                var m=ms.length?ms[ms.length-1]:null;
+                if(!m){m=document.createElement('meta');m.name='viewport';
+                  (document.head||document.documentElement).appendChild(m);}
+                if(m.content!=='width=1000'){m.content='width=1000';}
+            }
+            fix();
+            if(!window.__dmonlyFit){
+                window.__dmonlyFit=1;
+                new MutationObserver(fix).observe(document.documentElement,
+                  {childList:true,subtree:true,attributes:true,attributeFilter:['content']});
+            }
         })();"""
+
+        /** Visible width vs. page width, to zoom the call screen out until it all fits. */
+        private const val MEASURE_JS =
+            "(function(){var v=window.visualViewport;return (v?v.width:innerWidth)/Math.max(document.documentElement.scrollWidth,document.body?document.body.scrollWidth:0,1);})()"
     }
 
     private lateinit var root: FrameLayout
@@ -260,10 +274,9 @@ class MainActivity : ComponentActivity() {
 
     private fun onBack() {
         if (customView != null) { hideCustomView(); return }
-        val p = popup
-        if (p != null) {
-            if (p.visibility == View.VISIBLE) moveTaskToBack(true) // call keeps running
-            else closePopup()
+        if (popup != null) {
+            // Back from the call screen: close it and return to the chat (phone layout).
+            exitCallMode()
             return
         }
         if (showingArchive) { moveTaskToBack(true); return }
@@ -353,6 +366,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun exitCallMode() {
+        prefs.edit().putBoolean("call_mode_auto", false).apply()
+        closePopup()
         if (desktopMode()) setDesktopMode(false, auto = false)
     }
 
@@ -528,7 +543,9 @@ class MainActivity : ComponentActivity() {
             super.onPageFinished(view, url)
             if (desktopMode()) {
                 view.evaluateJavascript(FIT_CALL_JS, null)
-                handler.postDelayed({ if (popup == view) view.evaluateJavascript(FIT_CALL_JS, null) }, 1500)
+                for (delay in longArrayOf(400, 1500, 3000, 6000)) {
+                    handler.postDelayed({ fitPopupToWidth(view) }, delay)
+                }
             }
         }
     }
@@ -558,6 +575,16 @@ class MainActivity : ComponentActivity() {
             webView.loadUrl(target)
         }
         return true
+    }
+
+    /** Zooms the call window out until the whole call screen fits the phone's width. */
+    private fun fitPopupToWidth(view: WebView) {
+        if (popup != view) return
+        view.evaluateJavascript(FIT_CALL_JS, null)
+        view.evaluateJavascript(MEASURE_JS) { r ->
+            val ratio = r?.trim('"')?.toFloatOrNull() ?: return@evaluateJavascript
+            if (popup == view && ratio > 0.05f && ratio < 0.97f) view.zoomBy(ratio)
+        }
     }
 
     private fun showPopup() {
