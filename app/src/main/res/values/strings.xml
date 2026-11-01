@@ -3,6 +3,7 @@
     <string name="app_name">DMs</string>
     <string name="shortcut_update">Check for updates</string>
     <string name="shortcut_desktop">Desktop mode (calls)</string>
+    <string name="shortcut_settings">Instagram settings</string>
     <string name="shortcut_github">GitHub page</string>
     <color name="ic_launcher_background">#5B3FD9</color>
 </resources>

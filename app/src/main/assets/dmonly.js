@@ -18,6 +18,8 @@
     '/create/story',     // posting a story
     '/accounts/',        // login, settings, activity (likes/comments on your stuff)
     '/notifications',    // activity (other layout)
+    '/settings',         // settings pages
+    '/emails/', '/session/', '/your_activity/', '/privacy', '/help', '/legal/',
     '/challenge/', '/checkpoint/', '/auth_platform/', '/two_factor/', // security checks
   ];
 
@@ -39,12 +41,41 @@
 
   // Any allowed page that isn't itself a reel/post may open ONE reel/post ("one hop").
   // From a reel/post you can't go to another one, so there's no scrolling deeper.
+  // Your own profile (for the settings menu). The post grid on it is hidden by CSS.
+  const NOT_USERNAMES = new Set(['direct', 'explore', 'reels', 'reel', 'p', 'stories', 'accounts',
+    'notifications', 'create', 'call', 'settings', 'emails', 'session', 'your_activity', 'privacy',
+    'help', 'legal', 'challenge', 'checkpoint', 'auth_platform', 'two_factor']);
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+  const me = () => lsGet('dmonly_me');
+  const userOf = (p) => {
+    const m = (p || '').match(/^\/([A-Za-z0-9._]{1,30})\/?$/);
+    return m && !NOT_USERNAMES.has(m[1].toLowerCase()) ? m[1].toLowerCase() : null;
+  };
+  const isMyProfile = (p) => { const u = userOf(p); return !!u && u === me(); };
+
+  // Learn your username from the profile button in Instagram's bottom/side bar.
+  const learnMe = () => {
+    const home = document.querySelector('a[href="/"]');
+    let bar = home;
+    for (let i = 0; i < 6 && bar; i++) {
+      bar = bar.parentElement;
+      if (bar && bar.querySelectorAll('a[href]').length >= 3) break;
+    }
+    if (!bar) return;
+    for (const a of bar.querySelectorAll('a[href]')) {
+      const u = userOf(a.getAttribute('href'));
+      if (u && a.querySelector('img')) { if (me() !== u) lsSet('dmonly_me', u); return; }
+    }
+  };
+
   const isSource = (p) => !!p && !MEDIA_RE.test(p) &&
     (p === '/' || ALLOWED_PREFIXES.some((x) => p.startsWith(x)));
   const ticket = () => ss.get('dmonly_ticket');
 
   const allowed = (path, from) => {
     if (path === '/') return true; // stories tray only; feed hidden by CSS
+    if (isMyProfile(path)) return true; // settings live behind your profile
     if (ALLOWED_PREFIXES.some((p) => path.startsWith(p))) return true;
     const m = path.match(MEDIA_RE);
     if (m) {
@@ -100,6 +131,7 @@
     html.classList.toggle('dmonly-home', path === '/');
     html.classList.toggle('dmonly-media', MEDIA_RE.test(path));
     html.classList.toggle('dmonly-direct', path.startsWith('/direct/'));
+    html.classList.toggle('dmonly-myprofile', isMyProfile(path));
   };
 
   let lastPath = null;
@@ -197,6 +229,13 @@
       html.dmonly-media main article ~ article,
       html.dmonly-media .dmonly-more { display: none !important; }
 
+      /* Your profile: settings/edit buttons stay, the grid of posts/reels is hidden */
+      html.dmonly-myprofile main a[href^="/p/"],
+      html.dmonly-myprofile main a[href^="/reel/"],
+      html.dmonly-myprofile main a[href*="/reels/"],
+      html.dmonly-myprofile main a[href*="/tagged/"],
+      html.dmonly-myprofile main a[href*="/saved/"] { display: none !important; }
+
       /* Endless "loading" spinner where the hidden feed would be */
       html.dmonly-home main [data-visualcompletion="loading-state"],
       html.dmonly-home main [role="progressbar"],
@@ -227,6 +266,7 @@
 
   // 4) Periodic sweep: remove app banners; on reel/post pages hide links to OTHER reels/posts.
   const sweep = () => {
+    learnMe();
     // "Use the app" banners
     const els = document.querySelectorAll('a, button, [role="button"], span, div');
     for (const el of els) {
@@ -269,6 +309,23 @@
     sweepQueued = true;
     setTimeout(() => { sweepQueued = false; sweep(); }, 150);
   };
+
+  // TEMPORARY tap checker for the Notifications page: if a tap opens nothing,
+  // show what was tapped so the rule can be fixed.
+  const isNotifPage = () => /^\/(notifications|accounts\/activity)/.test(location.pathname);
+  document.addEventListener('click', (e) => {
+    if (!isNotifPage()) return;
+    const before = location.href;
+    const t = e.target;
+    const a = t && t.closest && t.closest('a[href]');
+    const btn = t && t.closest && t.closest('[role="button"], button');
+    const desc = a ? 'link ' + a.getAttribute('href')
+      : btn ? 'button "' + (btn.getAttribute('aria-label') || (btn.textContent || '').trim().slice(0, 25)) + '"'
+      : (t.tagName || '?').toLowerCase() + ' (not a link)';
+    setTimeout(() => {
+      if (location.href === before && isNotifPage()) showBanner('Tap opened nothing: ' + desc);
+    }, 1500);
+  }, true);
 
   const onReady = () => {
     addStyle();

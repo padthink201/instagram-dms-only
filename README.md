@@ -28,12 +28,14 @@ or the whole thing is pointless.
 - **Offline:** if your internet drops, what's already on screen stays. If the app is opened
   with no internet, it shows a saved copy of the last chat screen you had open
 - **Updates inside the app:** a small "New version · Update" bar appears when a new build is out
-- Long-press the app icon for **Check for updates**, **Desktop mode (calls)** and **GitHub page**
+- **Instagram settings:** tap your profile picture in the bottom bar. Your profile opens without the
+  post grid, so the ⚙️ / ☰ settings menu is there. Or long-press the app icon → **Instagram settings**
+- Long-press the app icon for **Check for updates**, **Desktop mode (calls)**, **Instagram settings** and **GitHub page**
 
 ## What's blocked on purpose
 - Home feed (the posts under the stories bar are hidden)
 - Reels tab and Explore
-- Profiles
+- Other people's profiles (your own opens, without the post grid)
 - Swiping from a reel someone sent you to other reels
 - Sharing / forwarding reels and posts
 - Creating posts and reels
@@ -52,7 +54,7 @@ app can't add them without breaking Instagram's rules and risking your account.
 | **Add to your story** when someone mentions you in theirs | ⚠️ Not confirmed. Probably not available on the website. |
 | Story stickers, music, polls etc. | ⚠️ Very limited on the website compared to the app. |
 | Push notifications | 🚫 Disabled on purpose (see above). Android's WebView can't receive web push anyway. |
-| Calls | Instagram's **mobile** website has no call buttons, so the app uses a **call mode**: tap the small 📞 on the right side of a chat. The chat reloads as the desktop website, which has audio and video call buttons. The call screen opens in landscape. When the call ends, the app switches back to the phone layout by itself (or tap **Exit** on the "Call mode" chip). |
+| Calls | Instagram's **mobile** website has no call buttons, so the app uses a **call mode**: tap the small 📞 on the right side of a chat. The chat reloads as the desktop website, which has audio and video call buttons. When the call ends, the app switches back to the phone layout by itself (or tap **Exit** on the "Call mode" chip). |
 | Incoming calls ringing while the app is closed | ❌ Not possible (needs push notifications). You can only get a call while the app is open. |
 | Offline copy | Read-only snapshot of the last chat screen. Sending messages needs internet. |
 

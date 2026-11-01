@@ -21,6 +21,16 @@
             android:targetClass="com.zurab.dmonly.MainActivity" />
     </shortcut>
     <shortcut
+        android:shortcutId="ig_settings"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_settings">
+        <intent
+            android:action="com.zurab.dmonly.SETTINGS"
+            android:targetPackage="com.zurab.dmonly"
+            android:targetClass="com.zurab.dmonly.MainActivity" />
+    </shortcut>
+    <shortcut
         android:shortcutId="github"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"

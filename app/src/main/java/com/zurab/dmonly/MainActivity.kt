@@ -10,7 +10,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
-import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -69,17 +68,11 @@ class MainActivity : ComponentActivity() {
         const val REPO_URL = "https://github.com/padthink201/instagram-dms-only"
         const val ACTION_CHECK_UPDATE = "com.zurab.dmonly.CHECK_UPDATE"
         const val ACTION_TOGGLE_DESKTOP = "com.zurab.dmonly.TOGGLE_DESKTOP"
+        const val ACTION_SETTINGS = "com.zurab.dmonly.SETTINGS"
+        const val SETTINGS_URL = "https://www.instagram.com/accounts/edit/"
         private val INSTAGRAM_ORIGINS = setOf("https://www.instagram.com", "https://instagram.com")
         private const val UPDATE_FILE = "DMs-update.apk"
         private const val SNAPSHOT_EVERY_MS = 45_000L
-
-        /** Makes the desktop call page lay out like a 16:9 screen, zoomed to fit. */
-        private const val WIDE_VIEWPORT_JS = """(function(){
-            var m=document.querySelector('meta[name=viewport]');
-            if(!m){m=document.createElement('meta');m.name='viewport';
-              (document.head||document.documentElement).appendChild(m);}
-            if(m.content!=='width=1280'){m.content='width=1280';}
-        })();"""
     }
 
     private lateinit var root: FrameLayout
@@ -207,6 +200,7 @@ class MainActivity : ComponentActivity() {
 
         checkForUpdates(manual = intent?.action == ACTION_CHECK_UPDATE)
         if (intent?.action == ACTION_TOGGLE_DESKTOP) toggleDesktopMode()
+        if (intent?.action == ACTION_SETTINGS) webView.loadUrl(SETTINGS_URL)
         updateModeUi(START_URL)
     }
 
@@ -215,6 +209,7 @@ class MainActivity : ComponentActivity() {
         when (intent.action) {
             ACTION_CHECK_UPDATE -> checkForUpdates(manual = true)
             ACTION_TOGGLE_DESKTOP -> toggleDesktopMode()
+            ACTION_SETTINGS -> webView.loadUrl(SETTINGS_URL)
         }
     }
 
@@ -440,16 +435,6 @@ class MainActivity : ComponentActivity() {
             closePopup()
             val p = WebView(this@MainActivity)
             configureWebView(p)
-            if (desktopMode()) {
-                p.settings.useWideViewPort = true
-                p.settings.loadWithOverviewMode = true
-                p.settings.setSupportZoom(true)
-                p.settings.builtInZoomControls = true
-                p.settings.displayZoomControls = false
-                if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
-                    WebViewCompat.addDocumentStartJavaScript(p, WIDE_VIEWPORT_JS, INSTAGRAM_ORIGINS)
-                }
-            }
             p.webViewClient = PopupClient()
             p.webChromeClient = this
             p.setBackgroundColor(Color.BLACK)
@@ -494,15 +479,6 @@ class MainActivity : ComponentActivity() {
         override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
             if (url != null) routePopup(Uri.parse(url))
-            if (desktopMode()) view.evaluateJavascript(WIDE_VIEWPORT_JS, null)
-        }
-
-        override fun onPageFinished(view: WebView, url: String?) {
-            super.onPageFinished(view, url)
-            if (desktopMode()) {
-                view.evaluateJavascript(WIDE_VIEWPORT_JS, null)
-                handler.postDelayed({ if (popup == view) view.evaluateJavascript(WIDE_VIEWPORT_JS, null) }, 1500)
-            }
         }
     }
 
@@ -538,8 +514,6 @@ class MainActivity : ComponentActivity() {
         if (p.visibility == View.VISIBLE) return
         p.showAnimated(fromY = 40f)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        // Desktop call screen is built for wide screens: use landscape (16:9).
-        if (desktopMode()) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
 
     private fun closePopup() {
@@ -548,7 +522,6 @@ class MainActivity : ComponentActivity() {
         root.removeView(p)
         handler.post { p.destroy() }
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         // Call ended: go back to the normal phone layout if call mode was switched on by 📞.
         if (prefs.getBoolean("call_mode_auto", false) && !isDestroyed) {
             handler.postDelayed({ if (!isDestroyed) exitCallMode() }, 600)
