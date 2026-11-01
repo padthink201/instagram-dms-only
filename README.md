@@ -28,7 +28,7 @@ or the whole thing is pointless.
 - **Offline:** if your internet drops, what's already on screen stays. If the app is opened
   with no internet, it shows a saved copy of the last chat screen you had open
 - **Updates inside the app:** a small "New version · Update" bar appears when a new build is out
-- Long-press the app icon for **Check for updates** and **GitHub page**
+- Long-press the app icon for **Check for updates**, **Desktop mode (calls)** and **GitHub page**
 
 ## What's blocked on purpose
 - Home feed (the posts under the stories bar are hidden)
@@ -52,7 +52,7 @@ app can't add them without breaking Instagram's rules and risking your account.
 | **Add to your story** when someone mentions you in theirs | ⚠️ Not confirmed. Probably not available on the website. |
 | Story stickers, music, polls etc. | ⚠️ Very limited on the website compared to the app. |
 | Push notifications | 🚫 Disabled on purpose (see above). Android's WebView can't receive web push anyway. |
-| Calls | ⚠️ Not confirmed. The app supports call windows, camera and mic, but Instagram decides whether its mobile website shows call buttons. |
+| Calls | ⚠️ Instagram's **mobile** website has no call buttons. Experimental workaround: long-press the app icon → **Desktop mode (calls)** to load the desktop website, which may show them. Same shortcut turns it off. |
 | Incoming calls ringing while the app is closed | ❌ Not possible (needs push notifications). You can only get a call while the app is open. |
 | Offline copy | Read-only snapshot of the last chat screen. Sending messages needs internet. |
 

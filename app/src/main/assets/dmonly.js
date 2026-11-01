@@ -168,12 +168,14 @@
     const style = document.createElement('style');
     style.id = 'dmonly-style';
     style.textContent = `
-      @keyframes dmonly-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+      @keyframes dmonly-in { from { opacity: .35; } to { opacity: 1; } }
       @keyframes dmonly-pop { from { opacity: 0; transform: translate(-50%, 12px) scale(.96); }
                               to   { opacity: .94; transform: translate(-50%, 0) scale(1); } }
 
-      /* Soft fade-in for every page */
-      body { animation: dmonly-in .22s ease-out both; }
+      /* Soft fade-in for every page.
+         Opacity only, no fill: an animated transform on <body> breaks Instagram's
+         pinned bottom bar (it starts scrolling with the page) and tap targets. */
+      body { animation: dmonly-in .2s ease-out; }
 
       /* Blank the page while bouncing back, so blocked pages never flash */
       html.dmonly-blocking body { visibility: hidden !important; }

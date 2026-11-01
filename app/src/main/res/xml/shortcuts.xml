@@ -11,6 +11,16 @@
             android:targetClass="com.zurab.dmonly.MainActivity" />
     </shortcut>
     <shortcut
+        android:shortcutId="desktop_mode"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/shortcut_desktop">
+        <intent
+            android:action="com.zurab.dmonly.TOGGLE_DESKTOP"
+            android:targetPackage="com.zurab.dmonly"
+            android:targetClass="com.zurab.dmonly.MainActivity" />
+    </shortcut>
+    <shortcut
         android:shortcutId="github"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher"

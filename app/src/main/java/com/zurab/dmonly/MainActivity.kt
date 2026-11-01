@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
         const val START_URL = "https://www.instagram.com/direct/inbox/"
         const val REPO_URL = "https://github.com/padthink201/instagram-dms-only"
         const val ACTION_CHECK_UPDATE = "com.zurab.dmonly.CHECK_UPDATE"
+        const val ACTION_TOGGLE_DESKTOP = "com.zurab.dmonly.TOGGLE_DESKTOP"
         private val INSTAGRAM_ORIGINS = setOf("https://www.instagram.com", "https://instagram.com")
         private const val UPDATE_FILE = "DMs-update.apk"
         private const val SNAPSHOT_EVERY_MS = 45_000L
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var guardScript: String
     private lateinit var prefs: SharedPreferences
     private var docStartInjection = false
+    private var defaultUserAgent: String? = null
     private val handler = Handler(Looper.getMainLooper())
 
     // Small floating chips (offline status, update)
@@ -193,11 +195,15 @@ class MainActivity : ComponentActivity() {
         if (offline && !showingArchive) showStatus("Offline")
 
         checkForUpdates(manual = intent?.action == ACTION_CHECK_UPDATE)
+        if (intent?.action == ACTION_TOGGLE_DESKTOP) toggleDesktopMode()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent.action == ACTION_CHECK_UPDATE) checkForUpdates(manual = true)
+        when (intent.action) {
+            ACTION_CHECK_UPDATE -> checkForUpdates(manual = true)
+            ACTION_TOGGLE_DESKTOP -> toggleDesktopMode()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -265,10 +271,35 @@ class MainActivity : ComponentActivity() {
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(true) // calls open in a new window
             allowFileAccess = true          // for the offline copy
-            userAgentString = userAgentString
-                .replace("; wv", "")
-                .replace(Regex("Version/[\\d.]+ "), "")
+            if (defaultUserAgent == null) defaultUserAgent = userAgentString
+            userAgentString = userAgentFor(desktopMode())
         }
+    }
+
+    private fun desktopMode(): Boolean = prefs.getBoolean("desktop_mode", false)
+
+    /**
+     * Phone mode: looks like mobile Chrome.
+     * Desktop mode: looks like Chrome on a computer, so Instagram shows its desktop
+     * features (like call buttons). Experimental.
+     */
+    private fun userAgentFor(desktop: Boolean): String {
+        val base = (defaultUserAgent ?: "")
+            .replace("; wv", "")
+            .replace(Regex("Version/[\\d.]+ "), "")
+        if (!desktop) return base
+        return base
+            .replace(Regex("\\(Linux; Android[^)]*\\)"), "(X11; Linux x86_64)")
+            .replace(" Mobile", "")
+    }
+
+    private fun toggleDesktopMode() {
+        val on = !desktopMode()
+        prefs.edit().putBoolean("desktop_mode", on).apply()
+        webView.settings.userAgentString = userAgentFor(on)
+        popup?.settings?.userAgentString = userAgentFor(on)
+        toast(if (on) "Desktop mode ON (for calls)" else "Desktop mode OFF")
+        webView.loadUrl(START_URL)
     }
 
     private inner class MainClient : WebViewClient() {
