@@ -33,6 +33,40 @@
 
   const html = document.documentElement;
 
+  // Keep recent background data Instagram downloads (used to open notification rows:
+  // a row's thumbnail file name appears in this data right next to the post's ID).
+  const RESP = [];
+  const keepText = (t) => {
+    if (typeof t !== 'string' || t.length > 4e6 || t.indexOf('_n.') < 0) return;
+    RESP.push(t);
+    if (RESP.length > 25) RESP.shift();
+  };
+  const interesting = (url) => /graphql|\/api\/|ajax|news|activity|notif/i.test(String(url || ''));
+  try {
+    const origFetch = window.fetch;
+    window.fetch = function (input) {
+      const pr = origFetch.apply(window, arguments);
+      try {
+        const url = typeof input === 'string' ? input : (input && input.url) || '';
+        if (interesting(url)) pr.then((r) => r.clone().text().then(keepText)).catch(() => {});
+      } catch (e) {}
+      return pr;
+    };
+  } catch (e) {}
+  try {
+    const xo = XMLHttpRequest.prototype.open;
+    const xs = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function (m, url) { this.__dmUrl = url; return xo.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function () {
+      if (interesting(this.__dmUrl)) {
+        this.addEventListener('load', function () {
+          try { if (!this.responseType || this.responseType === 'text') keepText(this.responseText); } catch (e) {}
+        });
+      }
+      return xs.apply(this, arguments);
+    };
+  } catch (e) {}
+
   const ss = {
     get: (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
     set: (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) {} },
@@ -379,7 +413,56 @@
     return null;
   };
 
+  // The row's thumbnail (only if exactly one: rows without a post have none).
+  const thumbFor = (el) => {
+    let n = el;
+    for (let i = 0; i < 10 && n && n !== document.body; i++, n = n.parentElement) {
+      const imgs = n.querySelectorAll ? n.querySelectorAll('img[alt="Media thumbnail"]') : [];
+      if (imgs.length === 1) return imgs[0];
+      if (imgs.length > 1) return null;
+    }
+    return null;
+  };
+  const thumbKey = (img) => {
+    const name = ((img && img.getAttribute('src')) || '').split('?')[0].split('/').pop() || '';
+    const m = name.match(/^(.+?)_n\.\w+$/);
+    return m ? m[1] : (name.length > 12 ? name : null);
+  };
+  const CANDS = [
+    [/\\?"code\\?"\s*:\s*\\?"([A-Za-z0-9_-]{8,14})\\?"/g, (v) => '/p/' + v + '/'],
+    [/media(?:\?id=|_id\\?"?\s*[:=]\s*\\?"?)(\d{17,20})/g, (v) => '/p/' + pkToCode(v) + '/'],
+    [/\\?"(?:id|pk|media_id)\\?"\s*:\s*\\?"?(\d{18,20})(?:_\d+)?/g, (v) => '/p/' + pkToCode(v) + '/'],
+  ];
+  const dataTexts = () => {
+    const texts = RESP.slice().reverse();
+    for (const sc of document.querySelectorAll('script[type="application/json"]')) texts.push(sc.textContent || '');
+    return texts;
+  };
+  const findByThumb = (key) => {
+    if (!key) return null;
+    for (const t of dataTexts()) {
+      const idx = t.indexOf(key);
+      if (idx < 0) continue;
+      const lo = Math.max(0, idx - 5000);
+      const win = t.slice(lo, idx + 5000);
+      const center = idx - lo;
+      let best = null, bestD = Infinity;
+      CANDS.forEach(([re, mk], ci) => {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(win))) {
+          const d = Math.abs(m.index - center) + ci * 300;
+          if (d < bestD) { bestD = d; best = mk(m[1]); }
+        }
+      });
+      if (best && best.indexOf('/p/null/') < 0) return best;
+    }
+    return null;
+  };
+
   const findTargetFor = (el) => {
+    const byThumb = findByThumb(thumbKey(thumbFor(el)));
+    if (byThumb) return byThumb;
     // 1) a plain link somewhere inside the row
     const row = el.closest('[role="listitem"], li') || el.parentElement;
     const link = row && row.querySelector && row.querySelector('a[href*="/p/"], a[href*="/reel"], a[href*="/stories/"]');
@@ -403,10 +486,17 @@
   // Collects what Instagram stored behind a row (for fixing the "can't open" case).
   const dumpRow = (el) => {
     const out = [];
-    const row = el.closest('[role="listitem"], li') || el.parentElement;
-    if (row) {
-      out.push('ROW-HTML: ' + row.outerHTML.replace(/\s+/g, ' ').slice(0, 1500));
+    const key = thumbKey(thumbFor(el));
+    out.push('THUMB-KEY: ' + key);
+    out.push('SAVED-RESPONSES: ' + RESP.length + ', JSON-SCRIPTS: ' + document.querySelectorAll('script[type="application/json"]').length);
+    if (key) {
+      for (const t of dataTexts()) {
+        const i = t.indexOf(key);
+        if (i >= 0) { out.push('AROUND-KEY: ' + t.slice(Math.max(0, i - 1500), i + 700)); break; }
+      }
     }
+    const row = thumbFor(el) ? thumbFor(el).closest('div[role], li') || el.parentElement : el.parentElement;
+    if (row) out.push('ROW-HTML: ' + row.outerHTML.replace(/\s+/g, ' ').slice(0, 800));
     let fiberKey = null;
     let node = el;
     for (; node && node !== document.body; node = node.parentElement) {
