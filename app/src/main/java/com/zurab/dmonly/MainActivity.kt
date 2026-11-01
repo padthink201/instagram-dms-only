@@ -919,16 +919,21 @@ class MainActivity : ComponentActivity() {
             .map { it.trim().lowercase() }
             .filter { it.isNotEmpty() }
 
-    /** Which gallery to show, or null if the page wants non-media files. */
+    /**
+     * Which gallery to show. Always the gallery when the page accepts photos or videos at all
+     * (even if it also lists other types); the file manager only when it wants no media.
+     */
     private fun galleryTypeFor(params: WebChromeClient.FileChooserParams): PickVisualMedia.VisualMediaType? {
         val types = acceptTypes(params)
-        if (types.isEmpty()) return PickVisualMedia.ImageAndVideo
-        val isImage = { t: String -> t.startsWith("image/") || t in setOf(".jpg", ".jpeg", ".png", ".heic", ".webp", ".gif") }
-        val isVideo = { t: String -> t.startsWith("video/") || t in setOf(".mp4", ".mov", ".m4v", ".webm") }
+        if (types.isEmpty() || types.any { it == "*/*" || it == "*" }) return PickVisualMedia.ImageAndVideo
+        val imageExt = setOf(".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".gif", ".avif", ".bmp")
+        val videoExt = setOf(".mp4", ".mov", ".m4v", ".webm", ".3gp", ".mkv", ".avi")
+        val hasImage = types.any { it.startsWith("image/") || it in imageExt }
+        val hasVideo = types.any { it.startsWith("video/") || it in videoExt }
         return when {
-            types.all(isImage) -> PickVisualMedia.ImageOnly
-            types.all(isVideo) -> PickVisualMedia.VideoOnly
-            types.all { isImage(it) || isVideo(it) } -> PickVisualMedia.ImageAndVideo
+            hasImage && hasVideo -> PickVisualMedia.ImageAndVideo
+            hasImage -> PickVisualMedia.ImageOnly
+            hasVideo -> PickVisualMedia.VideoOnly
             else -> null
         }
     }
