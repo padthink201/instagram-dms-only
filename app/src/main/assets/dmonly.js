@@ -438,7 +438,19 @@
     for (const sc of document.querySelectorAll('script[type="application/json"]')) texts.push(sc.textContent || '');
     return texts;
   };
-  const findByThumb = (key) => {
+  // Comment IDs near the thumbnail (e.g. "target_comment_id=179..." or "comment_id":"179...")
+  const COMMENT_RE = /(?:target_comment_id|comment_id|commentId|comment_pk)\\?"?\s*[:=]\s*\\?"?(\d{8,})/g;
+  const nearestComment = (win, center) => {
+    let best = null, bestD = Infinity, m;
+    COMMENT_RE.lastIndex = 0;
+    while ((m = COMMENT_RE.exec(win))) {
+      const d = Math.abs(m.index - center);
+      if (d < bestD && d < 4000) { bestD = d; best = m[1]; }
+    }
+    return best;
+  };
+
+  const findByThumb = (key, isComment) => {
     if (!key) return null;
     for (const t of dataTexts()) {
       const idx = t.indexOf(key);
@@ -455,13 +467,27 @@
           if (d < bestD) { bestD = d; best = mk(m[1]); }
         }
       });
-      if (best && best.indexOf('/p/null/') < 0) return best;
+      if (best && best.indexOf('/p/null/') < 0) {
+        if (isComment) {
+          // Comment notification: go straight to the comment (or the comments list).
+          const cid = nearestComment(win, center);
+          return cid ? best + 'c/' + cid + '/' : best + 'comments/';
+        }
+        return best;
+      }
     }
     return null;
   };
 
   const findTargetFor = (el) => {
-    const byThumb = findByThumb(thumbKey(thumbFor(el)));
+    const thumb = thumbFor(el);
+    // Row text, e.g. "... liked your comment: ...", "... replied to your comment ..."
+    let rowEl = thumb || el;
+    for (let i = 0; i < 4 && rowEl.parentElement && rowEl.parentElement.querySelectorAll('img[alt="Media thumbnail"]').length <= 1; i++) {
+      rowEl = rowEl.parentElement;
+    }
+    const isComment = /comment|replied|mentioned you in a comment/i.test(rowEl.textContent || '');
+    const byThumb = findByThumb(thumbKey(thumb), isComment);
     if (byThumb) return byThumb;
     // 1) a plain link somewhere inside the row
     const row = el.closest('[role="listitem"], li') || el.parentElement;
