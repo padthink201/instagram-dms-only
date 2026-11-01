@@ -67,26 +67,44 @@
   };
 
   // Hard block: hide everything instantly (no flash of feed), then go back to chats.
-  const hardBlock = (path) => {
+  const hardBlock = (path, silent) => {
     html.classList.add('dmonly-blocking');
-    ss.set('dmonly_blocked', path);
+    if (!silent) ss.set('dmonly_blocked', path);
     location.replace(backPath());
+  };
+
+  // Go to the chat list without reloading (uses Instagram's own inbox link if present).
+  const goInbox = () => {
+    const a = document.querySelector('a[href="/direct/inbox/"], a[href="/direct/inbox"]');
+    if (a) a.click(); else location.assign(HOME);
+  };
+
+  // Called by the app's back button.
+  window.__dmonlyBack = () => {
+    const p = location.pathname;
+    if (p === HOME || p === '/direct/inbox') return 'exit';
+    if (p.startsWith('/direct/')) { goInbox(); return 'handled'; }
+    return 'history';
   };
 
   const setPageClasses = (path) => {
     html.classList.toggle('dmonly-home', path === '/');
     html.classList.toggle('dmonly-media', MEDIA_RE.test(path));
+    html.classList.toggle('dmonly-direct', path.startsWith('/direct/'));
   };
 
   let lastPath = null;
+  let viaPopstate = false;
   const check = () => {
     const path = location.pathname;
     if (path === lastPath) return;
     const from = ss.get('dmonly_prev') || '';
     lastPath = path;
     setPageClasses(path);
+    const silent = viaPopstate;
+    viaPopstate = false;
     if (allowed(path, from)) accept(path, from);
-    else hardBlock(path);
+    else hardBlock(path, silent);
   };
 
   const pathOf = (url) => {
@@ -102,7 +120,8 @@
     if (!allowed(u.pathname, location.pathname)) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      showBanner('Blocked: ' + u.pathname);
+      if (location.pathname.startsWith('/direct/t/')) goInbox();
+      else showBanner('Blocked: ' + u.pathname);
     }
   }, true);
 
@@ -123,7 +142,7 @@
       return r;
     };
   }
-  window.addEventListener('popstate', check);
+  window.addEventListener('popstate', () => { viaPopstate = true; check(); });
   setInterval(check, 250);
   check();
 
@@ -139,8 +158,8 @@
       /* Reels tab + Explore buttons */
       a[href="/reels/"], a[href="/explore/"] { display: none !important; }
 
-      /* Feed posts are hidden everywhere except on a reel/post you opened from chat */
-      html:not(.dmonly-media) main article { display: none !important; }
+      /* Feed posts are hidden, but never inside chats or on a reel/post opened from chat */
+      html:not(.dmonly-media):not(.dmonly-direct) main article { display: none !important; }
 
       /* Endless "loading" spinner where the hidden feed would be */
       html.dmonly-home main [data-visualcompletion="loading-state"],

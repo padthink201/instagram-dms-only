@@ -201,10 +201,20 @@ class MainActivity : ComponentActivity() {
         }
 
         onBackPressedDispatcher.addCallback(this) {
-            when {
-                customView != null -> hideCustomView()
-                webView.canGoBack() -> webView.goBack()
-                else -> moveTaskToBack(true)
+            if (customView != null) {
+                hideCustomView()
+                return@addCallback
+            }
+            // Ask the page first: from a chat, back always goes to the chat list
+            // (never through old history entries like profiles, which are blocked).
+            webView.evaluateJavascript(
+                "(window.__dmonlyBack ? window.__dmonlyBack() : 'history')"
+            ) { result ->
+                when (result?.trim('"')) {
+                    "handled" -> Unit
+                    "exit" -> moveTaskToBack(true)
+                    else -> if (webView.canGoBack()) webView.goBack() else moveTaskToBack(true)
+                }
             }
         }
 
