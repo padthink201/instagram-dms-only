@@ -66,7 +66,7 @@ published as a new release. The app notices it on startup and shows a small
 allow "Install unknown apps" for DMs.) You can also install the new `DMs.apk` from the releases
 link above. Either way it installs over the old version and you stay logged in.
 
-Builds 1–7 don't have the update bar. Install build 8 or newer by hand once.
+Builds 1–6 don't have the update bar. Install build 7 or newer by hand once.
 
 ## For developers
 - Blocking rules: `app/src/main/assets/dmonly.js` (allowed paths are in `ALLOWED_PREFIXES`)
